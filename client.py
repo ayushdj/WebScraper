@@ -5,14 +5,15 @@ import argparse
 import socket_connection
 
 from html_parse import parse_all_href, parse_all_secret_flags
+from socket_connection import login_to_server
 
 
 def main(args):
     username = args.username
     password = args.password
 
-    socket_connection.login_to_server(username, password, 443)
-    pass
+    login_to_server(username, password, 443)
+    return
 
 
 if __name__ == '__main__':
