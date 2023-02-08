@@ -23,7 +23,6 @@ class HTTPSocket:
             path='/accounts/login/',
             headers={
                 'Host': self.host,
-                'Connection': 'close',
             }
         )
         sessionid_regex: str = r'sessionid=(\w+)'
@@ -89,17 +88,24 @@ class HTTPSocket:
         sock.sendall(payload.encode())
         self.socket_recv_all(sock)
 
-    def make_get_request(self, path: str, headers: dict) -> str:
+    def make_get_request(self, path: str, headers: dict, connection_alive: bool=False) -> str:
         """
         Send an HTTP request over the socket.
 
         Args:
             path: the href to send the HTTP request to
             headers: dictionary of headers to attach to request
+            connection_alive: whether or not to persist the connection to server
         Returns:
             str: response from the request as a string
         """
         sock = self.create_socket_connection()
+
+        if connection_alive:
+            headers['Connection'] = 'keep-alive'
+        else:
+            headers['Connection'] = 'close'
+
         request_headline = ' '.join(['GET', path, self.http_version])
         payload = request_headline + CLRF + CLRF.join(f'{k}: {v}' for k, v in headers.items()) + (CLRF*2)
 
