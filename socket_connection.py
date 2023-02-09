@@ -1,6 +1,7 @@
 import re
 import socket
 import ssl
+import time
 
 CLRF: str = '\r\n'
 
@@ -111,13 +112,31 @@ class HTTPSocket:
 
         sock.sendall(payload.encode())
         response =  self.socket_recv_all(sock)
+        response_code: int = int(self._parse_response_code(response.split('\n')[0]))
 
-        # TODO: Add response code handling
-        response_code: int = self._parse_response_code(response.split('\n')[0])
-        print(f'Response Code: {response_code}')
-        return response
+        if response_code == 500:
+            wait = 1
+            retry_response = self.make_get_request(path=path, headers=headers, connection_alive=connection_alive)
+            while retry_response == '':
+                time.sleep(2**wait)
+                retry_response = self.make_get_request(path=path, headers=headers, connection_alive=connection_alive)
+                if wait < 3:
+                    wait += 1
+        if response_code == 301:
+            response = self._handle_redirect(response.split(CLRF*2)[0])
+        return response if response_code not in [403, 404, 500] else ''
 
-
+    def _handle_redirect(self, response_header: str) -> str:
+        # Parse new location, perform new request.
+        new_location_regex: str = r'project2.5700.network(/.+)'
+        new_location_pattern = re.compile(new_location_regex)
+        try:
+            new_location: str = re.findall(new_location_pattern, response_header)[0]
+            return self.make_get_request(path=new_location, connection_alive=True, headers={})
+        except Exception as e:
+            print('An error occurred while parsing the redirect location', e)
+        return ''
+        
     def create_socket_connection(self) -> ssl.SSLSocket:
         """
         Create a connection to the Fakebook server. Callers of this function MUST
