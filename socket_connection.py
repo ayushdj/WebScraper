@@ -16,6 +16,7 @@ class HTTPSocket:
         self.session_id = None
         self.csrftoken = None
         self.csrfmiddlewaretoken = None
+        self.sock = self._create_socket_connection()
         self._get_cookies()
         self._login()
 
@@ -26,21 +27,14 @@ class HTTPSocket:
                 'Host': self.host,
             }
         )
-        sessionid_regex: str = r'sessionid=(\w+)'
-        sessionid_pattern = re.compile(sessionid_regex)
+
+        self._parse_sessionid(response)
 
         csrftoken_regex: str = r'csrftoken=(\w+)'
         csrftoken_pattern = re.compile(csrftoken_regex)
 
         csrfmwtoken_regex: str = r'name="csrfmiddlewaretoken" value="(.+)"'
         csrfmwtoken_pattern = re.compile(csrfmwtoken_regex)
-
-        try:
-            sessionid: str = re.findall(sessionid_pattern, response)[0]
-            self.session_id = sessionid
-
-        except Exception as e:
-            print('An error occurred while parsing sessionid', e)
 
         try:
             csrftoken: str = re.findall(csrftoken_pattern, response)[0]
@@ -56,6 +50,16 @@ class HTTPSocket:
         except Exception as e:
             print('An error occurred while parsing csrfmwtoken', e)
 
+    def _parse_sessionid(self, response: str):
+        sessionid_regex: str = r'sessionid=(\w+)'
+        sessionid_pattern = re.compile(sessionid_regex)
+        try:
+            sessionid: str = re.findall(sessionid_pattern, response)[0]
+            self.session_id = sessionid
+
+        except Exception as e:
+            print('An error occurred while parsing sessionid', e)
+
     def _parse_response_code(self, line: str) -> int:
         response_code_regex: str = r'HTTP/1.1 ([0-9]{3})'
         response_code_pattern = re.compile(response_code_regex)
@@ -70,7 +74,6 @@ class HTTPSocket:
         return 0
 
     def _login(self):
-        sock = self.create_socket_connection()
         request_headline = ' '.join(['POST', '/accounts/login/', self.http_version])
 
         body = f'username={self.username}&password={self.password}&csrfmiddlewaretoken={self.csrfmiddlewaretoken}&next=' + CLRF
@@ -82,14 +85,13 @@ class HTTPSocket:
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
             'Accept-Encoding': 'gzip, deflate, compress',
             'Referer': f'https://{self.host}/accounts/login/',
-            'Connection': 'close'
         }
 
         payload = request_headline + CLRF + CLRF.join(f'{k}: {v}' for k, v in headers.items()) + (CLRF * 2) + body
-        sock.sendall(payload.encode())
-        self.socket_recv_all(sock)
+        self.sock.sendall(payload.encode())
+        self._parse_sessionid(self.socket_recv_all())
 
-    def make_get_request(self, path: str, headers: dict, connection_alive: bool=False) -> str:
+    def make_get_request(self, path: str, headers: dict, connection_alive: bool=True) -> str:
         """
         Send an HTTP request over the socket.
 
@@ -100,8 +102,6 @@ class HTTPSocket:
         Returns:
             str: response from the request as a string
         """
-        sock = self.create_socket_connection()
-
         if connection_alive:
             headers['Connection'] = 'keep-alive'
         else:
@@ -110,9 +110,9 @@ class HTTPSocket:
         request_headline = ' '.join(['GET', path, self.http_version])
         payload = request_headline + CLRF + CLRF.join(f'{k}: {v}' for k, v in headers.items()) + (CLRF*2)
 
-        sock.sendall(payload.encode())
-        response =  self.socket_recv_all(sock)
-        response_code: int = int(self._parse_response_code(response.split('\n')[0]))
+        self.sock.sendall(payload.encode())
+        response =  self.socket_recv_all()
+        response_code: int = int(self._parse_response_code(response.split(CLRF*2)[0]))
 
         if response_code == 500:
             wait = 1
@@ -122,13 +122,14 @@ class HTTPSocket:
                 retry_response = self.make_get_request(path=path, headers=headers, connection_alive=connection_alive)
                 if wait < 3:
                     wait += 1
-        if response_code == 301:
+        if response_code in [301, 302]:
             response = self._handle_redirect(response.split(CLRF*2)[0])
+            print('after redirect')
         return response if response_code not in [403, 404, 500] else ''
 
     def _handle_redirect(self, response_header: str) -> str:
         # Parse new location, perform new request.
-        new_location_regex: str = r'project2.5700.network(/.+)'
+        new_location_regex: str = r'Location: (/.+)/\n'
         new_location_pattern = re.compile(new_location_regex)
         try:
             new_location: str = re.findall(new_location_pattern, response_header)[0]
@@ -137,7 +138,7 @@ class HTTPSocket:
             print('An error occurred while parsing the redirect location', e)
         return ''
         
-    def create_socket_connection(self) -> ssl.SSLSocket:
+    def _create_socket_connection(self) -> ssl.SSLSocket:
         """
         Create a connection to the Fakebook server. Callers of this function MUST
         close the socket.
@@ -152,26 +153,20 @@ class HTTPSocket:
         sock.settimeout(20)
         return sock
 
-    def socket_recv_all(self, sock: ssl.SSLSocket) -> str:
+    def socket_recv_all(self) -> str:
         """
         Receive all bytes from the socket and return them decoded as string.
         Closes the socket upon completion.
 
-        Args:
-            sock: SSLSocket instance
         Returns:
             str: response from receiving all bytes from socket
         """
         chunks = []
-        try:
-            while True:
-                chunk = sock.recv(4096)
-                if len(chunk) == 0:
-                    break
-                chunks.append(chunk)
-        except socket.timeout as e:
-            print(e)
+        while True:
+            chunk = self.sock.recv(8192)
+            chunks.append(chunk)
+            if len(chunk) < 8192:
+                break
 
-        sock.close()
         response = b''.join(chunks).decode()
         return response
