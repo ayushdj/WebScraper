@@ -111,7 +111,8 @@ class HTTPSocket:
         payload = request_headline + CLRF + CLRF.join(f'{k}: {v}' for k, v in headers.items()) + (CLRF*2)
 
         sock.sendall(payload.encode())
-        response =  self.socket_recv_all(sock)
+        response = self.socket_recv_all(sock)
+
         response_code: int = int(self._parse_response_code(response.split('\n')[0]))
 
         if response_code == 500:
@@ -174,4 +175,5 @@ class HTTPSocket:
 
         sock.close()
         response = b''.join(chunks).decode()
+        print(response)
         return response

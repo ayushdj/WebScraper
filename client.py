@@ -16,6 +16,28 @@ def main(args):
         password=args.password,
     )
 
+    # headers = {
+    #     'Host': client.host,
+    #     'Cookie': f'sessionid={client.session_id}; csrftoken={client.csrftoken}',
+    #     'Content-Type': 'application/x-www-form-urlencoded',
+    #     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    #     'Accept-Encoding': 'gzip, deflate, compress',
+    #     'Referer': f'https://{client.host}/accounts/login/',
+    #     'Connection': 'close'
+    # }
+    headers = {
+        'Host': client.host,
+        'Cookie': f'sessionid={client.session_id}; csrftoken={client.csrftoken}',
+    }
+
+    flags = []
+    queue = []
+    visited = {}
+    queue.append("/fakebook")
+    while len(queue) > 0 and len(flags) < 5:
+        resp = client.make_get_request(path=queue.pop(0), headers=headers)
+        print("THIS IS THE RESPONSE" + resp)
+        break
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='Fakebook Webcrawler')
