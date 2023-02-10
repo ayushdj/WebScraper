@@ -16,6 +16,7 @@ class HTTPSocket:
         self.session_id = None
         self.csrftoken = None
         self.csrfmiddlewaretoken = None
+        self.sock = self.create_socket_connection()
         self._get_cookies()
         self._login()
 
@@ -70,7 +71,7 @@ class HTTPSocket:
         return 0
 
     def _login(self):
-        sock = self.create_socket_connection()
+
         request_headline = ' '.join(['POST', '/accounts/login/', self.http_version])
 
         body = f'username={self.username}&password={self.password}&csrfmiddlewaretoken={self.csrfmiddlewaretoken}&next=' + CLRF
@@ -81,13 +82,13 @@ class HTTPSocket:
             'Content-Type': 'application/x-www-form-urlencoded',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
             'Accept-Encoding': 'gzip, deflate, compress',
-            'Referer': f'https://{self.host}/accounts/login/',
-            'Connection': 'close'
+            'Referer': f'https://{self.host}/accounts/login/'
         }
 
         payload = request_headline + CLRF + CLRF.join(f'{k}: {v}' for k, v in headers.items()) + (CLRF * 2) + body
-        sock.sendall(payload.encode())
-        self.socket_recv_all(sock)
+        print(payload)
+        self.sock.sendall(payload.encode())
+        self.socket_recv_all(self.sock)
 
     def make_get_request(self, path: str, headers: dict, connection_alive: bool=False) -> str:
         """
@@ -100,18 +101,21 @@ class HTTPSocket:
         Returns:
             str: response from the request as a string
         """
-        sock = self.create_socket_connection()
 
-        if connection_alive:
-            headers['Connection'] = 'keep-alive'
-        else:
-            headers['Connection'] = 'close'
+        # if connection_alive:
+        #headers['Connection'] = 'close'
+        # else:
+        #     headers['Connection'] = 'close'
 
         request_headline = ' '.join(['GET', path, self.http_version])
+        print("THIS IS THE REQUEST HEADLINE: " + request_headline)
         payload = request_headline + CLRF + CLRF.join(f'{k}: {v}' for k, v in headers.items()) + (CLRF*2)
+        print("SHOWING YOU THE PAYLOAD NOW: ")
+        print(payload)
+        self.sock.sendall(payload.encode())
 
-        sock.sendall(payload.encode())
-        response = self.socket_recv_all(sock)
+        response = self.socket_recv_all(self.sock)
+        print("THIS IS THE RESPONSE IN make_get_request: " + response)
 
         response_code: int = int(self._parse_response_code(response.split('\n')[0]))
 
@@ -123,13 +127,14 @@ class HTTPSocket:
                 retry_response = self.make_get_request(path=path, headers=headers, connection_alive=connection_alive)
                 if wait < 3:
                     wait += 1
-        if response_code == 301:
+        if response_code in [301, 302]:
             response = self._handle_redirect(response.split(CLRF*2)[0])
         return response if response_code not in [403, 404, 500] else ''
 
     def _handle_redirect(self, response_header: str) -> str:
         # Parse new location, perform new request.
-        new_location_regex: str = r'project2.5700.network(/.+)'
+        new_location_regex: str = r'Location: (/.+)\n'
+
         new_location_pattern = re.compile(new_location_regex)
         try:
             new_location: str = re.findall(new_location_pattern, response_header)[0]
@@ -150,7 +155,7 @@ class HTTPSocket:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock = context.wrap_socket(sock, server_hostname=self.host)
         sock.connect(self.addr)
-        sock.settimeout(20)
+        #sock.settimeout(None)
         return sock
 
     def socket_recv_all(self, sock: ssl.SSLSocket) -> str:
@@ -166,14 +171,13 @@ class HTTPSocket:
         chunks = []
         try:
             while True:
-                chunk = sock.recv(4096)
-                if len(chunk) == 0:
+                chunk = sock.recv(16384)
+                if not chunk:
                     break
                 chunks.append(chunk)
         except socket.timeout as e:
             print(e)
 
-        sock.close()
+        #sock.close()
         response = b''.join(chunks).decode()
-        print(response)
         return response

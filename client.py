@@ -28,16 +28,21 @@ def main(args):
     headers = {
         'Host': client.host,
         'Cookie': f'sessionid={client.session_id}; csrftoken={client.csrftoken}',
+        # 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        # 'Accept-Encoding': 'gzip, deflate, br'
     }
 
     flags = []
     queue = []
     visited = {}
-    queue.append("/fakebook")
+    queue.append("/fakebook/")
     while len(queue) > 0 and len(flags) < 5:
-        resp = client.make_get_request(path=queue.pop(0), headers=headers)
-        print("THIS IS THE RESPONSE" + resp)
+        size = len(queue)
+        resp = client.make_get_request(path=queue.pop(0), headers=headers, connection_alive=False)
+        print("THIS IS THE RESPONSE: " + resp)
+        #client.sock.close()
         break
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='Fakebook Webcrawler')
