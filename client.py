@@ -32,8 +32,8 @@ def main(args):
             visited.add(href)
         flags.extend(parse_all_secret_flags(response))
     client.sock.close()
-    for i, flag in enumerate(flags):
-        print(f'Flag {i+1}: {flag}')
+    for flag in flags:
+        print(flag)
 
 
 if __name__ == '__main__':
