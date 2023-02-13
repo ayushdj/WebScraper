@@ -70,7 +70,6 @@ class HTTPSocket:
 
         except Exception as e:
             print('An error occurred while parsing response code', e)
-            exit()
 
         return 0
 
