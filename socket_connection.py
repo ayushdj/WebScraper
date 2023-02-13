@@ -70,6 +70,7 @@ class HTTPSocket:
 
         except Exception as e:
             print('An error occurred while parsing response code', e)
+            exit()
 
         return 0
 
@@ -112,7 +113,14 @@ class HTTPSocket:
 
         self.sock.sendall(payload.encode())
         response =  self.socket_recv_all()
-        response_code: int = int(self._parse_response_code(response.split(CLRF*2)[0]))
+        response_code = 0
+        split_items = response.split(CLRF*2)
+        for item in split_items:
+            if not item.startswith(self.http_version):
+                continue
+            response_code = int(self._parse_response_code(item))
+            if response_code != 0:
+                break
 
         if response_code == 500:
             wait = 1
