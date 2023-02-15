@@ -31,8 +31,9 @@ def main(args):
                 queue.append(href)
             visited.add(href)
         flags.extend(parse_all_secret_flags(response))
-        print(flags)
     client.sock.close()
+    for flag in flags:
+        print(flag)
 
 
 if __name__ == '__main__':
